@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+
+<html>
+ <head>
+  <title>Landscape</title>
+  <style type="text/css">
+body, html{margin:0;padding:0;}
+#cvs{background-color:rgb(72, 192, 255);}
+.options{position:absolute;top:10px;}
+#newLandscapeMenuButton{left:5px;}
+#newLandscapeMenu{display:none;top:40px;}
+#treesBackground{display:none;}
+#createNewLandscape{top:80px;}
+img{display:none;}
+  </style>
+  <script type="text/javascript">
+var cvs, ctx, cw, ch;
+var a = 0, b = 4.25;
+var zoom = 0.1;
+
+var landCoords = [];
+var triangles = [];
+var minX = 0, minY = 0, maxX = 0, maxY = 0;
+var width = 40, depth = 40, height = 4, steepness = 10;
+var averageLandColour = [72, 255, 72];
+
+var trees = null;
+var treeCoords = [];
+var treeTriangles = [];
+var canopy, trunks;
+var averageTreeColour = [72, 192, 72];
+
+var birdCoords = [];
+var birdPoints = [];
+
+var lightness = 1;
+var time = 0;
+
+var imageData;
+
+var userMovement = false;
+
+function updateDecoration() {
+	imageData = ctx.getImageData(minX, minY, maxX, maxY);
+	data = imageData.data;
+	for (var i = 0; i < data.length*4; i += 16) {
+		data[i] = data[i] + Math.floor(Math.random()*51)-20;
+		data[i+1] = data[i+1] + Math.floor(Math.random()*51)-20;
+		data[i+2] = data[i+2] + Math.floor(Math.random()*51)-20;
+	}
+}
+
+function decorate() {
+	ctx.putImageData(imageData, minX, minY);
+}
+
+function triangulate(mode, point1, point2, point3, point4 = []) {
+	if (mode == "land") {
+		var fill = "rgb(" + (point1[3][0]+point2[3][0]+point3[3][0])/3 + "," + (point1[3][1]+point2[3][1]+point3[3][1])/3 + ","  + (point1[3][2]+point2[3][2]+point3[3][2])/3 + ")";
+		ctx.fillStyle = fill;
+		ctx.strokeStyle = fill;
+		ctx.beginPath();
+		ctx.moveTo(point1[1], point1[2]);
+		ctx.lineTo(point2[1], point2[2]);
+		ctx.lineTo(point3[1], point3[2]);
+		ctx.fill();
+		ctx.stroke();
+	}
+	else if (mode == "trees") {
+		var fill = "rgb(" + (point1[3][0]+point2[3][0]+point3[3][0])/3 + "," + (point1[3][1]+point2[3][1]+point3[3][1])/3 + ","  + (point1[3][2]+point2[3][2]+point3[3][2])/3 + ")";
+		//ctx.save();
+		ctx.fillStyle = fill;
+		ctx.strokeStyle = fill;
+		ctx.beginPath();
+		ctx.moveTo(point1[1], point1[2]);
+		ctx.lineTo(point2[1], point2[2]);
+		ctx.lineTo(point4[1], point4[2]);
+		ctx.lineTo(point3[1], point3[2]);
+		ctx.fill();
+		ctx.stroke();
+		//ctx.clip();
+		//ctx.drawImage(canopy, point1[1], point1[2], point4[1] - point1[1], point4[2] - point1[2]);
+		//ctx.drawImage(trunks, point1[1], (point3[2]+point1[2])/2);
+		//ctx.drawImage(treesBackground, point1[1], point1[2], Math.max(point4[1], point)-point2[1], point4[2]-point1[2]);
+		//ctx.restore();
+	}
+	else if (mode == "birds") {
+		ctx.strokeStyle = "black";
+		ctx.beginPath();
+		ctx.moveTo(point1[1], point1[2]);
+		ctx.lineTo(point2[1], point2[2]);
+		ctx.lineTo(point3[1], point3[2]);
+		ctx.stroke();
+	}
+}
+
+function calculateColour(mode, height, depth) {
+	var shade = ((height + 2) * 20 + depth*3);
+	if (shade < 0) shade = 0;
+	if (shade > 255) shade = 255;
+	if (mode == "land") {
+		var r = ((averageLandColour[0]+shade*1)/2) * lightness;
+		var g = ((averageLandColour[1]+shade*1)/2) * lightness;
+		var b = ((averageLandColour[2]+shade*1.3)/2) * lightness;
+	}
+	else if (mode == "trees") {
+		var r = ((averageTreeColour[0])/2) * lightness;
+		var g = ((averageTreeColour[1])/2) * lightness;
+		var b = ((averageTreeColour[2])/2) * lightness;
+	}
+	else if (mode == "trunks") {
+		var r = 255;
+		var g = 0;
+		var b = 0;
+	}
+	var colour = [r, g, b];
+	return colour
+}
+
+function calculatePositions(mode, u, v, w) {
+	u2 = u * Math.cos(a) - v * Math.sin(a);
+	v2 = u * Math.sin(a) + v * Math.cos(a);
+			
+	u = u2; v = v2; w *= steepness;
+			
+	v2 = v * Math.cos(b) - w * Math.sin(b);
+	w2 = v * Math.sin(b) + w * Math.cos(b);
+
+	shade = calculateColour(mode, -w, w2);
+	v = v2; w = w2 + 100;
+			
+	var posX = (u * (w + 1) * zoom) + cw*0.5;
+	var posY = (v * (w + 1) * zoom) + ch*0.5;
+	if (posX >= 0 && posX < minX) {minX = posX;}
+	if (posY >= 0 && posY < minY) {minY = posY;}
+	if (posX <= cw && posX > maxX) {maxX = posX;}
+	if (posY <= ch && posY > maxY) {maxY = posY;}
+	
+	return [w2, posX, posY, shade]
+}
+
+function calculateLand() {
+	for (x = 0; x < landCoords.length; x++) {
+		for (y = 0; y < landCoords[x].length; y++) {
+			var point1 = calculatePositions("land", x-width/2, y-depth/2, -landCoords[x][y]);
+			if (x+1 < landCoords.length) {var point2 = calculatePositions("land", x+1-width/2, y-depth/2, -landCoords[x+1][y]);}
+			if (y+1 < landCoords[x].length) {var point3 = calculatePositions("land", x-width/2, y+1-depth/2, -landCoords[x][y+1]);}
+			if (x-1 >= 0) {var point4 = calculatePositions("land", x-1-width/2, y-depth/2, -landCoords[x-1][y]);}
+			if (y-1 >= 0) {var point5 = calculatePositions("land", x-width/2, y-1-depth/2, -landCoords[x][y-1]);}
+			if (x+1 < landCoords.length && y+1 < landCoords[x].length) {triangles.push(["land", point1, point2, point3]);	}
+			if (x-1 >= 0 && y-1 >= 0) {triangles.push(["land", point1, point4, point5]);}
+		}
+	}
+}
+
+function calculateTrees() {
+	for (x = 0; x < treeCoords.length; x++) {
+		for (y = 0; y < treeCoords[x].length; y++) {
+			var gradientX = (x+1 < treeCoords.length) ? Math.abs(landCoords[x][y] - landCoords[x+1][y]) : 0;
+			var gradientY = (y+1 < treeCoords[x].length) ? Math.abs(landCoords[x][y] - landCoords[x][y+1]) : 0;
+			var gradientXY = (x+1 < treeCoords.length && y+1 < treeCoords[x].length) ? Math.abs(landCoords[x][y] - landCoords[x+1][y+1]) : 0;
+			if (treeCoords[x][y] > 0 && landCoords[x][y] < 1 && gradientX < 1.5 && gradientY < 1.5 && gradientXY < 1.5) {
+				var point1 = calculatePositions("trees", x-width/2, y-depth/2, -landCoords[x][y] - 1);
+				if (x+1 < landCoords.length) {var point2 = calculatePositions("trees", x+1-width/2, y-depth/2, -landCoords[x+1][y] - 1);}
+				if (y+1 < landCoords[x].length) {var point3 = calculatePositions("trees", x-width/2, y+1-depth/2, -landCoords[x][y+1] - 1);}
+				if (x-1 >= 0) {var point4 = calculatePositions("trees", x-1-width/2, y-depth/2, -landCoords[x-1][y] - 1);}
+				if (y-1 >= 0) {var point5 = calculatePositions("trees", x-width/2, y-1-depth/2, -landCoords[x][y-1] - 1);}
+				if (y+1 < landCoords[x].length && x+1 < landCoords.length) {var fourthCorner = calculatePositions("trees", x+1-width/2, y+1-depth/2, -landCoords[x+1][y+1] - 1);}
+				if (fourthCorner[0] > point1[0]) {var tmpPoint = point1; point1 = fourthCorner, fourthCorner = tmpPoint;}
+				if (x+1 < landCoords.length && y+1 < landCoords[x].length) {triangles.push(["trees", point1, point2, point3, fourthCorner]);}
+				triangles.push(["trees", point1, point2, calculatePositions("trees", x-width/2, y-depth/2, -landCoords[x][y]), calculatePositions("trees", x+1-width/2, y-depth/2, -landCoords[x][y+1])])
+				triangles.push(["trees", point1, point3, calculatePositions("trees", x-width/2, y-depth/2, -landCoords[x][y]), calculatePositions("trees", x-width/2, y+1-depth/2, -landCoords[x][y+1])])
+			}
+		}
+	}
+}
+
+function calculateBirds() {
+	
+}
+
+function mainLoop() {
+	if (userMovement){
+		minX = cw/2, minY = ch/2, maxX = cw/2, maxY = ch/2;
+		triangles = [];
+		treeTriangles = [];
+	
+		calculateLand();
+		if (trees) {
+			calculateTrees();
+		}
+
+		triangles.sort(function(c, d) {
+			c = c[1][0];
+			d = d[1][0];
+			return c < d ? -1 : (c > d ? 1 : 0);
+		});
+	
+		ctx.clearRect(0, 0, cw, ch);
+	
+		for (var i = 0; i < triangles.length; i++) {
+			triangulate(triangles[i][0], triangles[i][1], triangles[i][2], triangles[i][3], (triangles[i][4] == undefined) ? [] : triangles[i][4]);
+		}
+	
+		updateDecoration();
+		decorate();
+	}
+	userMovement = false;
+}
+
+function moveWithMouse(e) {
+	userMovement = true;
+	a = e.clientX / 99;
+	b = e.clientY / 99;
+	if (b > 4.65) {b = 4.65;}
+	else if(b < 3.25) {b = 3.25;}
+}
+
+function mouseWheelHandler(e) {
+	userMovement = true;
+	// cross-browser wheel delta
+	var e = window.event || e; // old IE support
+	var delta = Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail)));	
+	zoom += delta*0.1*zoom;
+}
+
+function newLandscape() {
+	userMovement = true;
+	steepness = document.getElementById("steepness").value/5;
+	for (var x = 0; x < width+1; x++) {
+		landCoords.push([]);
+		for (var y = 0; y < depth+1; y++) {
+			if (x == 0) {landCoords[x][y] = Math.floor(Math.random()*3);}
+			else {
+				if (y == 0) {landCoords[x][y] = landCoords[x-1][y] + Math.ceil(Math.random()*3)-2;}
+				else {landCoords[x][y] = (landCoords[x-1][y]+landCoords[x][y-1])/2 + Math.ceil(Math.random()*3)-2;}
+			}
+		}
+	}
+	
+	trees = document.getElementById("trees").checked;
+	if (trees) {
+		for (var x = 0; x < landCoords.length; x++) {
+			treeCoords.push([]);
+			for (var y = 0; y < landCoords[x].length; y++) {
+				if (x == 0) {treeCoords[x][y] = Math.round(Math.random()*3);}
+				else {
+					if (y == 0) {treeCoords[x][y] = (treeCoords[x-1][y] + Math.floor(Math.random()*10)-1)%2;}
+					else if (y % 10 > 0 && (treeCoords[x-1][y] > 0 || treeCoords[x][y-1] > 0)) {treeCoords[x][y] = 3;}
+					else {treeCoords[x][y] = ((treeCoords[x-1][y]+treeCoords[x][y-1])/2 + Math.floor(Math.random()*10)-1)%2;}
+				}
+			}
+		}
+	}
+}
+
+function init() {
+	cvs = document.getElementById("cvs");
+	var w = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+	var h = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+	cw = w-4, ch = h-4;
+	cvs.width = cw;
+	cvs.height = ch;
+	
+	ctx = cvs.getContext("2d");
+	
+	canopy = document.getElementById("canopy");
+	trunks = document.getElementById("trunks");
+	
+	newLandscape();
+	
+	setInterval(mainLoop, 40);
+}
+if (document.addEventListener){
+	// IE9, Chrome, Safari, Opera
+	document.addEventListener("mousewheel", mouseWheelHandler, false);
+	// Firefox
+	document.addEventListener("DOMMouseScroll", mouseWheelHandler, false);
+	//Initialise
+	document.addEventListener("DOMContentLoaded", init, false);
+}
+// IE 6/7/8
+else {
+	document.attachEvent("onmousewheel", mouseWheelHandler);
+	body.onload(init);
+}
+  </script>
+ </head>
+ <body onmousemove="moveWithMouse(event);">
+  <canvas id="cvs"></canvas>
+  <button class="options" id="newLandscapeMenuButton" onclick="document.getElementById('newLandscapeMenu').style.display = (document.getElementById('newLandscapeMenu').style.display == 'block') ? 'none' : 'block'">New</button>
+  <div id="newLandscapeMenu">
+   <ul class="options">
+    <li>Steepness<input type="range" id="steepness" name="steepness" value="4" min="0" max="8" /></li>
+    <li>Trees<input type="checkbox" id="trees" name="trees" /></li>
+   </ul>
+   <button class="options" id="createNewLandscape" onclick="newLandscape()">Create</button>
+  </div>
+  <img id="canopy" src="canopy.png" alt="" />
+  <img id="trunks" src="trunks.png" alt="" />
+ </body>
+</html>
