@@ -210,9 +210,9 @@ function mainLoop() {
 
 function moveWithMouse(e) {
 	userMovement = true;
-	a = e.clientX / 99;
-	b = e.clientY / 99;
-	if (b > 4.65) {b = 4.65;}
+	a = -e.clientX / 99;
+	b = e.clientY / 150;
+    if (b > 4.65) {b = 4.65;}
 	else if(b < 3.25) {b = 3.25;}
 }
 
