@@ -2,7 +2,7 @@
 
 <html>
  <head>
-  <title>Landscape</title>
+  <title>Peaks</title>
   <style type="text/css">
 body, html{margin:0;padding:0;}
 #cvs{background-color:rgb(72, 192, 255);}
@@ -120,22 +120,22 @@ function calculateColour(mode, height, depth) {
 function calculatePositions(mode, u, v, w) {
 	u2 = u * Math.cos(a) - v * Math.sin(a);
 	v2 = u * Math.sin(a) + v * Math.cos(a);
-			
+
 	u = u2; v = v2; w *= steepness;
-			
+
 	v2 = v * Math.cos(b) - w * Math.sin(b);
 	w2 = v * Math.sin(b) + w * Math.cos(b);
 
 	shade = calculateColour(mode, -w, w2);
 	v = v2; w = w2 + 100;
-			
+
 	var posX = (u * (w + 1) * zoom) + cw*0.5;
 	var posY = (v * (w + 1) * zoom) + ch*0.5;
 	if (posX >= 0 && posX < minX) {minX = posX;}
 	if (posY >= 0 && posY < minY) {minY = posY;}
 	if (posX <= cw && posX > maxX) {maxX = posX;}
 	if (posY <= ch && posY > maxY) {maxY = posY;}
-	
+
 	return [w2, posX, posY, shade]
 }
 
@@ -176,7 +176,7 @@ function calculateTrees() {
 }
 
 function calculateBirds() {
-	
+
 }
 
 function mainLoop() {
@@ -184,7 +184,7 @@ function mainLoop() {
 		minX = cw/2, minY = ch/2, maxX = cw/2, maxY = ch/2;
 		triangles = [];
 		treeTriangles = [];
-	
+
 		calculateLand();
 		if (trees) {
 			calculateTrees();
@@ -195,13 +195,13 @@ function mainLoop() {
 			d = d[1][0];
 			return c < d ? -1 : (c > d ? 1 : 0);
 		});
-	
+
 		ctx.clearRect(0, 0, cw, ch);
-	
+
 		for (var i = 0; i < triangles.length; i++) {
 			triangulate(triangles[i][0], triangles[i][1], triangles[i][2], triangles[i][3], (triangles[i][4] == undefined) ? [] : triangles[i][4]);
 		}
-	
+
 		updateDecoration();
 		decorate();
 	}
@@ -220,7 +220,7 @@ function mouseWheelHandler(e) {
 	userMovement = true;
 	// cross-browser wheel delta
 	var e = window.event || e; // old IE support
-	var delta = Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail)));	
+	var delta = Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail)));
 	zoom += delta*0.1*zoom;
 }
 
@@ -237,7 +237,7 @@ function newLandscape() {
 			}
 		}
 	}
-	
+
 	trees = document.getElementById("trees").checked;
 	if (trees) {
 		for (var x = 0; x < landCoords.length; x++) {
@@ -261,14 +261,14 @@ function init() {
 	cw = w-4, ch = h-4;
 	cvs.width = cw;
 	cvs.height = ch;
-	
+
 	ctx = cvs.getContext("2d");
-	
+
 	canopy = document.getElementById("canopy");
 	trunks = document.getElementById("trunks");
-	
+
 	newLandscape();
-	
+
 	setInterval(mainLoop, 40);
 }
 if (document.addEventListener){
